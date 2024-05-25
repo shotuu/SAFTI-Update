@@ -1,0 +1,36 @@
+from telethon import TelegramClient, events
+import logging
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Load configuration from environment variables
+api_id = os.getenv('TELEGRAM_API_ID')
+api_hash = os.getenv('TELEGRAM_API_HASH')
+wbgt_channel = int(os.getenv('WBGT_CHANNEL'))
+cat_channel = int(os.getenv('CAT_CHANNEL'))
+
+client = TelegramClient('simple_receiver', api_id, api_hash)
+
+@client.on(events.NewMessage(chats=[wbgt_channel, cat_channel]))
+async def handler(event):
+    """Event handler for incoming messages."""
+    try:
+        message_content = event.message.text
+        chat_id = event.chat_id
+        logger.info(f"Received message from chat_id {chat_id}: {message_content}")
+    except Exception as e:
+        logger.error(f"Error handling message: {e}")
+
+with client:
+    logger.info("Starting client...")
+    logger.info(f"WBGT CHANNEL ID: {wbgt_channel}")
+    logger.info(f"CAT CHANNEL ID: {cat_channel}")
+    client.run_until_disconnected()
+    logger.info("Client stopped.")
