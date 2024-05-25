@@ -3,7 +3,7 @@ import re
 import logging
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 # Load environment variables from .env file
@@ -19,6 +19,7 @@ api_hash = os.getenv('TELEGRAM_API_HASH')
 wbgt_channel = int(os.getenv('WBGT_CHANNEL'))
 cat_channel = int(os.getenv('CAT_CHANNEL'))
 test_wbgt_channel = int(os.getenv('TEST_WBGT_CHANNEL'))
+test_cat_channel = int(os.getenv('TEST_CAT_CHANNEL'))
 destination_channel = int(os.getenv('DESTINATION_CHANNEL'))
 
 client = TelegramClient('new', api_id, api_hash)
@@ -28,7 +29,7 @@ SINGAPORE_TZ = pytz.timezone('Asia/Singapore')
 class UpdateHandler:
     def __init__(self):
         self.track_wbgt = ''
-        self.track_cat_status = 'No CAT 1 update as of now'
+        self.track_cat_status = '☀️ No CAT 1 Currently'
         self.last_message_id = None
         self.last_temp = None
         self.cat_timing = None
@@ -70,16 +71,25 @@ class UpdateHandler:
     def update_cat_status(self, timing):
         """Update CAT status based on the timing and current time."""
         now = datetime.now(SINGAPORE_TZ)
-        start_time, end_time = timing.split('-')
-        start_time = datetime.strptime(start_time, '%H%M').replace(year=now.year, month=now.month, day=now.day, tzinfo=SINGAPORE_TZ)
-        end_time = datetime.strptime(end_time, '%H%M').replace(year=now.year, month=now.month, day=now.day, tzinfo=SINGAPORE_TZ)
+        logger.info(f"Current time: {now.strftime('%H:%M')}")
+        logger.info(f"CAT 1 timing: {timing}")
+        
+        # Parse the timing strings correctly with Singapore timezone
+        start_time_str, end_time_str = timing.split('-')
+        start_time = SINGAPORE_TZ.localize(datetime.strptime(start_time_str, '%H%M').replace(year=now.year, month=now.month, day=now.day))
+        end_time = SINGAPORE_TZ.localize(datetime.strptime(end_time_str, '%H%M').replace(year=now.year, month=now.month, day=now.day))
+        
+        logger.info(f"Start time: {start_time}, Now: {now}, End time: {end_time}")
 
         if start_time <= now <= end_time:
             self.cat_timing = timing
-            return f"CAT 1: {timing[:2]}:{timing[2:4]} - {timing[5:7]}:{timing[7:]}"
+            logger.info(f"CAT 1 is active: {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}")
+            return f"⚡ CAT 1: {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}"
         else:
             self.cat_timing = None
-            return 'No CAT 1 update as of now'
+            logger.info("No CAT 1 currently")
+            return '☀️ No CAT 1 Currently'
+
 
     async def handle_wbgt_message(self, message_content):
         """Handle WBGT messages and send updates to the destination channel."""
@@ -101,7 +111,6 @@ class UpdateHandler:
                 except Exception as e:
                     logger.error(f"Failed to send message: {e}")
             elif self.last_message_id:
-                self.last_temp = safti_temp
                 final_message = self.create_message()
                 logger.info(f"Editing WBGT message to: {final_message}")
                 try:
@@ -119,6 +128,7 @@ class UpdateHandler:
             timing_match = re.search(r"\((\d{4}-\d{4})\)\n(?:.*?,)*?02", message_content)
             if timing_match:
                 timing = timing_match.group(1)
+                logger.info(f"CAT timing match found: {timing}")
                 cat_status = self.update_cat_status(timing)
                 if self.track_cat_status != cat_status:
                     self.track_cat_status = cat_status
@@ -133,7 +143,7 @@ class UpdateHandler:
             else:
                 logger.info("No timing match found in CAT message")
         elif "All Sectors Clear" in message_content or "02" not in message_content:
-            self.track_cat_status = 'No CAT 1 update as of now'
+            self.track_cat_status = '☀️ No CAT 1 Currently'
             final_message = self.create_message()
             logger.info(f"Sending CAT clear message: {final_message}")
             try:
@@ -161,18 +171,22 @@ class UpdateHandler:
             elif chat_id == test_wbgt_channel:
                 logger.info("Message from TEST WBGT channel")
                 await self.handle_wbgt_message(message_content)
+            elif chat_id == test_cat_channel:
+                logger.info("Message from TEST CAT channel")
+                await self.handle_cat_message(message_content)
             else:
                 logger.info(f"Message from unknown channel (chat_id: {chat_id})")
         except Exception as e:
             logger.error(f"Error handling message: {e}")
 
 update_handler = UpdateHandler()
-client.on(events.NewMessage(chats=[wbgt_channel, cat_channel, test_wbgt_channel]))(update_handler.handler)
+client.on(events.NewMessage(chats=[wbgt_channel, cat_channel, test_wbgt_channel, test_cat_channel]))(update_handler.handler)
 
 with client:
     logger.info("Starting client...")
     logger.info(f"WBGT CHANNEL ID: {wbgt_channel}")
     logger.info(f"CAT CHANNEL ID: {cat_channel}")
     logger.info(f"TEST WBGT CHANNEL ID: {test_wbgt_channel}")
+    logger.info(f"TEST CAT CHANNEL ID: {test_cat_channel}")
     client.run_until_disconnected()
     logger.info("Client stopped.")
