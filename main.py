@@ -33,6 +33,7 @@ class UpdateHandler:
         self.last_message_id = None
         self.last_temp = None
         self.cat_timing = None
+        self.active_cat = False
 
     def determine_wbgt(self, temperature):
         """Determine WBGT color code and emoji based on the temperature."""
@@ -83,13 +84,13 @@ class UpdateHandler:
 
         if start_time <= now <= end_time:
             self.cat_timing = timing
+            self.active_cat = True
             logger.info(f"CAT 1 is active: {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}")
             return f"⚡ CAT 1: {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}"
         else:
             self.cat_timing = None
             logger.info("No CAT 1 currently")
             return '☀️ No CAT 1 Currently'
-
 
     async def handle_wbgt_message(self, message_content):
         """Handle WBGT messages and send updates to the destination channel."""
@@ -111,6 +112,7 @@ class UpdateHandler:
                 except Exception as e:
                     logger.error(f"Failed to send message: {e}")
             elif self.last_message_id:
+                self.last_temp = safti_temp
                 final_message = self.create_message()
                 logger.info(f"Editing WBGT message to: {final_message}")
                 try:
@@ -143,15 +145,17 @@ class UpdateHandler:
             else:
                 logger.info("No timing match found in CAT message")
         elif "All Sectors Clear" in message_content or "02" not in message_content:
-            self.track_cat_status = '☀️ No CAT 1 Currently'
-            final_message = self.create_message()
-            logger.info(f"Sending CAT clear message: {final_message}")
-            try:
-                sent_message = await client.send_message(destination_channel, final_message)
-                self.last_message_id = sent_message.id
-                logger.info(f"Message sent with ID: {self.last_message_id}")
-            except Exception as e:
-                logger.error(f"Failed to send message: {e}")
+            if self.active_cat:
+                self.track_cat_status = '☀️ No CAT 1 Currently'
+                self.active_cat = False
+                final_message = self.create_message()
+                logger.info(f"Sending CAT clear message: {final_message}")
+                try:
+                    sent_message = await client.send_message(destination_channel, final_message)
+                    self.last_message_id = sent_message.id
+                    logger.info(f"Message sent with ID: {self.last_message_id}")
+                except Exception as e:
+                    logger.error(f"Failed to send message: {e}")
         else:
             logger.info("Message does not contain CAT 1 and sector 02")
 
