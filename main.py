@@ -82,7 +82,7 @@ class UpdateHandler:
         
         logger.info(f"Start time: {start_time}, Now: {now}, End time: {end_time}")
 
-        if start_time <= now <= end_time:
+        if now <= end_time:
             self.cat_timing = timing
             self.active_cat = True
             logger.info(f"CAT 1 is active: {start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}")
